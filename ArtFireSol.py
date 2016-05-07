@@ -58,13 +58,14 @@ def calcTheta(v, g, x, y):
     angles["low"] = math.atan((v**2 - (v**4 - g*(g*x**2 + 2*y*v**2))**.5) / (g*x))
     return angles
 
-def calcEotvos(bearing, velocity, latitude = 35.122002, longitude = 16.610501): 
-    omega = 380.6
+def calcEotvos(bearing, velocity, latitude = 35.122002): 
+    latitude = latitude * (2 * math.pi/360)
+    omega = math.cos(latitude) * 1670
     earthRadius = 6367444.7
     rbearing = bearing * (2 * math.pi / 360) #bearing in radians
     u = math.cos(rbearing) * velocity #latitudinal velocity
     v = math.sin(rbearing) * velocity #longitudinal velocity
-    a = 2 * omega * u * math.cos(latitude * (2 * math.pi / 360)) + (u**2 + v**2)/earthRadius
+    a = 2 * omega * u * math.cos(latitude) + (u**2 + v**2)/earthRadius
     return a
 
 #Begin program
