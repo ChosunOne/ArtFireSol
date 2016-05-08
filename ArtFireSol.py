@@ -49,8 +49,14 @@ def calcRange(a, b):
     return 10 * (a**2 + b**2)**.5
 
 def calcMuzzleVelocity(g, x, theta, y):
+    theta = theta * (2 * math.pi / 360)
     v = ((-g * (x**2) * (math.tan(theta)**2 + 1)) / (2*y - 2*x*math.tan(theta)))**.5
     return v
+
+def calcFireRange(v, g, theta, y):
+    theta = theta * (2 * math.pi / 360)
+    range = (-2 * v**2 * math.tan(theta) - ((2 * v**2 * math.tan(theta))**2 - 4 * (-g*(math.tan(theta)**2 + 1) * -2 * y * v**2))**.5) / (-2 * g * (math.tan(theta)**2 + 1))
+    return range
 
 def calcTheta(v, g, x, y):
     angles = {}
@@ -58,18 +64,35 @@ def calcTheta(v, g, x, y):
     angles["low"] = math.atan((v**2 - (v**4 - g*(g*x**2 + 2*y*v**2))**.5) / (g*x))
     return angles
 
-def calcEotvos(bearing, velocity, latitude = 35.122002): 
+def calcEotvos(bearing, velocity, latitude = 35.122002, theta = 45.0): 
     latitude = latitude * (2 * math.pi/360)
-    omega = math.cos(latitude) * 1670
-    earthRadius = 6367444.7
+    theta = theta * (2 * math.pi/360)
+    omega = 7.27 * 10**-5
+    earthRadius = 6367444.7 * math.cos(latitude)
     rbearing = bearing * (2 * math.pi / 360) #bearing in radians
-    u = math.cos(rbearing) * velocity #latitudinal velocity
-    v = math.sin(rbearing) * velocity #longitudinal velocity
+    u = (math.sin(rbearing) * velocity) * math.cos(theta) #latitudinal velocity
+    v = (math.cos(rbearing) * velocity) * math.cos(theta)  #longitudinal velocity
     a = 2 * omega * u * math.cos(latitude) + (u**2 + v**2)/earthRadius
     return a
 
 #Begin program
 
+weapons = {}
+with open('velocities.txt', 'r') as f:
+    currentWeapon = ""
+    for line in f:
+        if line == '\n':
+            lastline = line
+        elif lastline == '\n':
+            #This is a new weapon
+            line = line.replace('\n', '')
+            weapons[line] = [line]
+            currentWeapon = line
+            lastline = line
+        else:
+            line = line.replace('\n', '')
+            weapons[currentWeapon].append(line)
+            lastline = line
 quit = False
 while not quit:
 
@@ -78,9 +101,16 @@ while not quit:
     print()
     print("Select an artillery weapon")
     print()
-    print("1. MK6 Mortar")
-    print("2. M4 Scorcher / Sochor")
-    print("3. M5 MLRS")
+
+    selection = {}
+    index = 1
+    for wep in weapons.keys():
+        print(str(index) + '. ' + wep)
+        selection[index] = wep
+        index += 1
+
+    print(str(index) + ". Calibrate a weapon")
+
     print()
     v = 0.0
     x = 0.0
@@ -92,18 +122,66 @@ while not quit:
     theta = 0.0
     battery = 0
     target = 0
-    weapon = input()
-    print()
-    if weapon.lower() != '1' and weapon.lower() != '2' and weapon.lower() != '3':
-        print("invalid selection")
-        print()
-    elif weapon == '1':
-        #We are using the MK6 Mortar
 
-        battery = numericalInput("Enter your 8 figure battery grid reference \n")
-        
-        if len(battery) != 8:
+    try:
+        weapon = int(input())
+    except:
+        print("invalid selection")
+        continue
+
+    print()
+
+    battery = numericalInput("Enter your 8 figure battery grid reference \n")
+    if len(battery) != 8:
             print("invalid grid reference")
+            continue
+
+    if weapon == index:
+        #Calibrate a weapon
+
+        name = input("Enter the name of the weapon you wish to calibrate\n")
+        if name not in weapons.keys():
+            weapons[name] = [name]
+            weapons[name].append(input("Enter the number of firing speeds for the " + name + "\n"))
+            for i in range(0, int(weapons[name][1])):
+                #Create entries to fill in during testing
+                weapons[name].append("")
+                weapons[name].append("")
+
+        h2 = int(numericalInput("Enter your elevation \n"))
+        calibration = {}
+        for i in range(0, int(weapons[name][1])):
+            clear
+            print("Firing Speed " + str(i))
+            target = numericalInput("Please fire at bearing 180 and angle 80, and record the 8-figure grid reference where the shell lands here\n")
+            h1 = int(numericalInput("Enter the elevation where the shell landed\n"))
+            A = calcA(target, battery)
+            B = calcB(target, battery)
+            q = calcQ(target, battery)
+            x = calcRange(A, B)
+            y = h1 - h2
+            g = 9.80665
+            v = calcMuzzleVelocity(g, x, 80, y)
+            muzzleVelocity = round(v, 2)
+            minRange = int(x)
+            maxRange = int(calcFireRange(v, g, 45, y))
+            weapons[name][2 + i] = str(minRange) + " - " + str(maxRange)
+            weapons[name][int(weapons[name][1]) + 2 + i] = str(muzzleVelocity)
+
+        #Write calibration to velocities.txt file
+        with open('velocities.txt', 'w') as f:
+            for wep in weapons.keys():
+                f.write('\n')
+                for prop in weapons[wep]:
+                    f.write(prop + '\n')
+
+        continue
+    else:
+        try:
+            selected = selection[weapon]
+        except:
+            print("invalid selection")
+            print()
             continue
 
         h2 = int(numericalInput("Enter your elevation \n"))
@@ -122,20 +200,22 @@ while not quit:
             y = h1 - h2
             bearing = calcBearing(q, A, B)
             g = 9.80665
-            g += calcEotvos(bearing, v)
+            v = 0
 
-            if x < 34:
-                print("Target is too close to battery")
-                continue
-            elif 34 <= x <= 499:
-                v = 70.0
-            elif 139 <= x <= 1998:
-                v = 140.0
-            elif 284 <= x <= 4078:
-                v = 200.0
-            else:
-                print("Target is out of range")
-                continue
+            for i in range(0, int(weapons[selected][1])):
+                range = weapons[selected][i + 2]
+                range = range.split(' - ')
+                if x < int(range[0]):
+                    print("Target is too close to battery")
+                    break
+                elif int(range[0]) <= x <= int(range[1]):
+                    v = float(weapons[selected][int(weapons[selected][1]) + 2 + i])
+                    break
+
+            #Calculate estimate of theta for estimate of Eotvos effect
+            thetas = calcTheta(v, g, x, y)
+            eotvos = (calcEotvos(bearing, v, theta = thetas["high"]) + calcEotvos(bearing, v, theta = thetas["low"])) / 2.0
+            g += eotvos
 
             angles = calcTheta(v, g, x, y)
 
@@ -148,9 +228,9 @@ while not quit:
             print()
             print("Range:", x)
             print("Bearing:", bearing)
-            print("High Elevation:", math.degrees(angles["high"]))
+            print("High Angle:", math.degrees(angles["high"]))
             print("ETA:", hightime, "seconds")
-            print("Low Elevation:", math.degrees(angles["low"]))
+            print("Low Angle:", math.degrees(angles["low"]))
             print("ETA:", lowtime, "seconds")
             print()
 
@@ -159,135 +239,202 @@ while not quit:
                 firing = False
                 clear()
 
-    elif weapon == '2':
-        #We are using the scorcher or the sochor
+
+
+
+
+
+    #if weapon == '1':
+    #    #We are using the MK6 Mortar
+
+    #    battery = numericalInput("Enter your 8 figure battery grid reference \n")
         
-        battery = numericalInput("Enter your 8 figure battery grid reference \n")
+    #    if len(battery) != 8:
+    #        print("invalid grid reference")
+    #        continue
+
+    #    h2 = int(numericalInput("Enter your elevation \n"))
+
+    #    firing = True
+    #    while firing:
+    #        print("FIRING MODE")
+    #        print()
+    #        target = numericalInput("Enter your target's 8 figure grid reference \n")
+    #        h1 = int(numericalInput("Enter your target's elevation \n"))
+
+    #        A = calcA(target, battery)
+    #        B = calcB(target, battery)
+    #        q = calcQ(target, battery)
+    #        x = calcRange(A, B)
+    #        y = h1 - h2
+    #        bearing = calcBearing(q, A, B)
+    #        g = 9.80665
+    #        g += calcEotvos(bearing, v)
+
+    #        if x < 34:
+    #            print("Target is too close to battery")
+    #            continue
+    #        elif 34 <= x <= 499:
+    #            v = 70.0
+    #        elif 139 <= x <= 1998:
+    #            v = 140.0
+    #        elif 284 <= x <= 4078:
+    #            v = 200.0
+    #        else:
+    #            print("Target is out of range")
+    #            continue
+
+    #        angles = calcTheta(v, g, x, y)
+
+    #        hightime = calcTime(x, v, angles["high"])
+    #        lowtime = calcTime(x, v, angles["low"])
+
+    #        clear()
+
+    #        print("FIRING SOLUTION")
+    #        print()
+    #        print("Range:", x)
+    #        print("Bearing:", bearing)
+    #        print("High Elevation:", math.degrees(angles["high"]))
+    #        print("ETA:", hightime, "seconds")
+    #        print("Low Elevation:", math.degrees(angles["low"]))
+    #        print("ETA:", lowtime, "seconds")
+    #        print()
+
+    #        more = numericalInput("Enter new target? 1/0 \n")
+    #        if int(more) == 0:
+    #            firing = False
+    #            clear()
+
+    #elif weapon == '2':
+    #    #We are using the scorcher or the sochor
         
-        if len(battery) != 8:
-            print("invalid grid reference")
-            continue
-
-        h2 = int(numericalInput("Enter your elevation \n"))
-
-        firing = True
-        while firing:
-            print("FIRING MODE")
-            print()
-            target = numericalInput("Enter your target's 8 figure grid reference \n")
-            h1 = int(numericalInput("Enter your target's elevation \n"))
-
-            A = calcA(target, battery)
-            B = calcB(target, battery)
-            q = calcQ(target, battery)
-            x = calcRange(A, B)
-            y = h1 - h2
-            bearing = calcBearing(q, A, B)
-            g = 9.80665
-            g += calcEotvos(bearing, v)
-            if x < 826:
-                print("Target is too close to battery")
-                continue
-            elif 826 <= x <= 2415:
-                v = 153.9
-            elif 2059 <= x <= 6021:
-                v = 243.0
-            elif 5271 <= x <= 15414:
-                #v = 388.8
-                v = 477.6
-            elif 14644 <= x <= 42818:
-                v = 648.0
-            elif 22881 <= x <= 66903:
-                v = 810.0
-            else:
-                print("Target is out of range")
-                continue
-
-            angles = calcTheta(v, g, x, y)
-
-            hightime = calcTime(x, v, angles["high"])
-            lowtime = calcTime(x, v, angles["low"])
-
-            clear()
-
-            print("FIRING SOLUTION")
-            print()
-            print("Range:", x)
-            print("Bearing:", round(bearing, 2))
-            print("High Elevation:", round(math.degrees(angles["high"]), 2))
-            print("ETA:", round(hightime, 2), "seconds")
-            print("Low Elevation:", round(math.degrees(angles["low"]), 2))
-            print("ETA:", round(lowtime, 2), "seconds")
-            print()
-
-            more = numericalInput("Enter new target? 1/0 \n")
-            if int(more) == 0:
-                firing = False
-                clear()
-
-    elif weapon == '3':
-        #We are using the MLRS
+    #    battery = numericalInput("Enter your 8 figure battery grid reference \n")
         
-        battery = numericalInput("Enter your 8 figure battery grid reference \n")
+    #    if len(battery) != 8:
+    #        print("invalid grid reference")
+    #        continue
 
-        if len(battery) != 8:
-            print("invalid grid reference")
-            continue
+    #    h2 = int(numericalInput("Enter your elevation \n"))
 
-        h2 = int(numericalInput("Enter your elevation \n"))
+    #    firing = True
+    #    while firing:
+    #        print("FIRING MODE")
+    #        print()
+    #        target = numericalInput("Enter your target's 8 figure grid reference \n")
+    #        h1 = int(numericalInput("Enter your target's elevation \n"))
 
-        firing = True
-        while firing:
-            print("FIRING MODE")
-            print()
-            target = numericalInput("Enter your target's 8 figure grid reference \n")
-            h1 = int(numericalInput("Enter your target's elevation \n"))
+    #        A = calcA(target, battery)
+    #        B = calcB(target, battery)
+    #        q = calcQ(target, battery)
+    #        x = calcRange(A, B)
+    #        y = h1 - h2
+    #        bearing = calcBearing(q, A, B)
+    #        g = 9.80665
+    #        g += calcEotvos(bearing, v)
+    #        if x < 826:
+    #            print("Target is too close to battery")
+    #            continue
+    #        elif 826 <= x <= 2415:
+    #            v = 153.9
+    #        elif 2059 <= x <= 6021:
+    #            v = 243.0
+    #        elif 5271 <= x <= 15414:
+    #            #v = 388.8
+    #            v = 477.6
+    #        elif 14644 <= x <= 42818:
+    #            v = 648.0
+    #        elif 22881 <= x <= 66903:
+    #            v = 810.0
+    #        else:
+    #            print("Target is out of range")
+    #            continue
 
-            A = calcA(target, battery)
-            B = calcB(target, battery)
-            q = calcQ(target, battery)
-            x = calcRange(A, B)
-            y = h1 - h2
-            bearing = calcBearing(q, A, B)
-            g = 9.80665
-            g += calcEotvos(bearing, v)
+    #        angles = calcTheta(v, g, x, y)
 
-            if x < 826:
-                print("Target is too close to battery")
-                continue
-            elif 799 <= x <= 4604:
-                v = 212.5
-            elif 3918 <= x <= 18418:
-                v = 425.0
-            elif 7196 <= x <= 41442:
-                v = 637.5
-            elif 12793 <= x <= 73674:
-                v = 772.5
-            else:
-                print("Target is out of range")
-                continue
+    #        hightime = calcTime(x, v, angles["high"])
+    #        lowtime = calcTime(x, v, angles["low"])
 
-            angles = calcTheta(v, g, x, y)
+    #        clear()
 
-            hightime = calcTime(x, v, angles["high"])
-            lowtime = calcTime(x, v, angles["low"])
+    #        print("FIRING SOLUTION")
+    #        print()
+    #        print("Range:", x)
+    #        print("Bearing:", round(bearing, 2))
+    #        print("High Elevation:", round(math.degrees(angles["high"]), 2))
+    #        print("ETA:", round(hightime, 2), "seconds")
+    #        print("Low Elevation:", round(math.degrees(angles["low"]), 2))
+    #        print("ETA:", round(lowtime, 2), "seconds")
+    #        print()
 
-            clear()
+    #        more = numericalInput("Enter new target? 1/0 \n")
+    #        if int(more) == 0:
+    #            firing = False
+    #            clear()
 
-            print("FIRING SOLUTION")
-            print()
-            print("Range:", x)
-            print("Bearing:", round(bearing, 2))
-            print("High Elevation:", round(math.degrees(angles["high"]), 2))
-            print("ETA:", round(hightime, 2), "seconds")
-            print("Low Elevation:", round(math.degrees(angles["low"]), 2))
-            print("ETA:", round(lowtime, 2), "seconds")
-            print()
+    #elif weapon == '3':
+    #    #We are using the MLRS
+        
+    #    battery = numericalInput("Enter your 8 figure battery grid reference \n")
 
-            more = numericalInput("Enter new target? 1/0 \n")
-            if int(more) == 0:
-                firing = False
-                clear()
+    #    if len(battery) != 8:
+    #        print("invalid grid reference")
+    #        continue
+
+    #    h2 = int(numericalInput("Enter your elevation \n"))
+
+    #    firing = True
+    #    while firing:
+    #        print("FIRING MODE")
+    #        print()
+    #        target = numericalInput("Enter your target's 8 figure grid reference \n")
+    #        h1 = int(numericalInput("Enter your target's elevation \n"))
+
+    #        A = calcA(target, battery)
+    #        B = calcB(target, battery)
+    #        q = calcQ(target, battery)
+    #        x = calcRange(A, B)
+    #        y = h1 - h2
+    #        bearing = calcBearing(q, A, B)
+    #        g = 9.80665
+    #        g += calcEotvos(bearing, v)
+
+    #        if x < 826:
+    #            print("Target is too close to battery")
+    #            continue
+    #        elif 799 <= x <= 4604:
+    #            v = 212.5
+    #        elif 3918 <= x <= 18418:
+    #            v = 425.0
+    #        elif 7196 <= x <= 41442:
+    #            v = 637.5
+    #        elif 12793 <= x <= 73674:
+    #            v = 772.5
+    #        else:
+    #            print("Target is out of range")
+    #            continue
+
+    #        angles = calcTheta(v, g, x, y)
+
+    #        hightime = calcTime(x, v, angles["high"])
+    #        lowtime = calcTime(x, v, angles["low"])
+
+    #        clear()
+
+    #        print("FIRING SOLUTION")
+    #        print()
+    #        print("Range:", x)
+    #        print("Bearing:", round(bearing, 2))
+    #        print("High Elevation:", round(math.degrees(angles["high"]), 2))
+    #        print("ETA:", round(hightime, 2), "seconds")
+    #        print("Low Elevation:", round(math.degrees(angles["low"]), 2))
+    #        print("ETA:", round(lowtime, 2), "seconds")
+    #        print()
+
+    #        more = numericalInput("Enter new target? 1/0 \n")
+    #        if int(more) == 0:
+    #            firing = False
+    #            clear()
             
 
 
