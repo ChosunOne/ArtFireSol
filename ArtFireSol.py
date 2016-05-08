@@ -55,8 +55,8 @@ def calcMuzzleVelocity(g, x, theta, y):
 
 def calcFireRange(v, g, theta, y):
     theta = theta * (2 * math.pi / 360)
-    range = (-2 * v**2 * math.tan(theta) - ((2 * v**2 * math.tan(theta))**2 - 4 * (-g*(math.tan(theta)**2 + 1) * -2 * y * v**2))**.5) / (-2 * g * (math.tan(theta)**2 + 1))
-    return range
+    r = (-2 * v**2 * math.tan(theta) - ((2 * v**2 * math.tan(theta))**2 - 4 * (-g*(math.tan(theta)**2 + 1) * -2 * y * v**2))**.5) / (-2 * g * (math.tan(theta)**2 + 1))
+    return r
 
 def calcTheta(v, g, x, y):
     angles = {}
