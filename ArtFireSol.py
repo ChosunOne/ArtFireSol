@@ -151,7 +151,7 @@ while not quit:
         h2 = int(numericalInput("Enter your elevation \n"))
         calibration = {}
         for i in range(0, int(weapons[name][1])):
-            clear
+            clear()
             print("Firing Speed " + str(i))
             target = numericalInput("Please fire at bearing 180 and angle 80, and record the 8-figure grid reference where the shell lands here\n")
             h1 = int(numericalInput("Enter the elevation where the shell landed\n"))
