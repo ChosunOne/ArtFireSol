@@ -153,7 +153,7 @@ while not quit:
         for i in range(0, int(weapons[name][1])):
             clear()
             print("Firing Speed " + str(i))
-            theta = numericalInput("Enter the firing angle you will be firing with")
+            theta = int(numericalInput("Enter the firing angle you will be firing with"))
             target = numericalInput("Please fire at bearing 180, and record the 8-figure grid reference where the shell lands here\n")
             h1 = int(numericalInput("Enter the elevation where the shell landed\n"))
             A = calcA(target, battery)
