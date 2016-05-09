@@ -153,7 +153,8 @@ while not quit:
         for i in range(0, int(weapons[name][1])):
             clear()
             print("Firing Speed " + str(i))
-            target = numericalInput("Please fire at bearing 180 and angle 80, and record the 8-figure grid reference where the shell lands here\n")
+            theta = numericalInput("Enter the firing angle you will be firing with")
+            target = numericalInput("Please fire at bearing 180, and record the 8-figure grid reference where the shell lands here\n")
             h1 = int(numericalInput("Enter the elevation where the shell landed\n"))
             A = calcA(target, battery)
             B = calcB(target, battery)
@@ -161,7 +162,7 @@ while not quit:
             x = calcRange(A, B)
             y = h1 - h2
             g = 9.80665
-            v = calcMuzzleVelocity(g, x, 80, y)
+            v = calcMuzzleVelocity(g, x, theta, y)
             muzzleVelocity = round(v, 2)
             minRange = int(x)
             maxRange = int(calcFireRange(v, g, 45, y))
@@ -209,6 +210,7 @@ while not quit:
                     print("Target is too close to battery")
                     break
                 elif int(range[0]) <= x <= int(range[1]):
+                    print("Using speed setting " + str(i))
                     v = float(weapons[selected][int(weapons[selected][1]) + 2 + i])
                     break
 
