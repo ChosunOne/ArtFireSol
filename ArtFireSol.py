@@ -164,7 +164,7 @@ while not quit:
             g = 9.80665
             v = calcMuzzleVelocity(g, x, theta, y)
             muzzleVelocity = round(v, 2)
-            minRange = int(x)
+            minRange = int(calcFireRange(v, g, 80, y))
             maxRange = int(calcFireRange(v, g, 45, y))
             weapons[name][2 + i] = str(minRange) + " - " + str(maxRange)
             weapons[name][int(weapons[name][1]) + 2 + i] = str(muzzleVelocity)
